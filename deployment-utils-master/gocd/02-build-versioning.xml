@@ -1,0 +1,29 @@
+<pipelines group="deployment">
+  <pipeline name="python-matheval">
+    <materials>
+      <git url="https://github.com/python-ci-cd/python-matheval.git"
+          dest="source" materialName="python-matheval" />
+      <git url="https://github.com/python-ci-cd/deployment-utils.git"
+          dest="deployment-utils" materialName="deployment-utils" />
+    </materials>
+    <stage name="build" cleanWorkingDir="true">
+      <jobs>
+        <job name="build-deb" timeout="5">
+          <tasks>
+            <exec command="../deployment-utils/debian-autobuild"
+                  workingdir="source" />
+          </tasks>
+          <artifacts>
+            <artifact src="version" type="build"/>
+            <artifact src="*.deb" dest="debian-packages/"
+              type="build" />
+          </artifacts>
+          <resources>
+            <resource>debian-stretch</resource>
+            <resource>build</resource>
+          </resources>
+        </job>
+      </jobs>
+    </stage>
+  </pipeline>
+</pipelines>

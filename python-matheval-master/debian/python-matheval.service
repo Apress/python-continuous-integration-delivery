@@ -1,0 +1,18 @@
+[Unit]
+Description=Evaluates mathematical expression
+Requires=network.target
+After=network.target
+
+[Service]
+Type=simple
+SyslogIdentifier=python-matheval
+User=nobody
+ExecStart=/usr/share/python-custom/python-matheval/bin/gunicorn --bind 0.0.0.0:8800 matheval.frontend:app
+
+PrivateTmp=yes
+InaccessibleDirectories=/home
+ReadOnlyDirectories=/bin /sbin /usr /lib /etc
+
+
+[Install]
+WantedBy=multi-user.target

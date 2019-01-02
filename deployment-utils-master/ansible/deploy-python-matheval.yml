@@ -1,0 +1,8 @@
+---
+- hosts: web
+  serial: 1
+  max_fail_percentage: 1
+  tasks:
+    - apt: update_cache=yes package=python-matheval={{package_version}} state=present force=yes
+    - local_action: command ../smoke-tests/python-matheval "{{ansible_ssh_host}}"
+      changed_when: False

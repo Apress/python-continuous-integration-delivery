@@ -1,0 +1,96 @@
+  <pipelines group="deployment">
+    <pipeline name="python-matheval" template="debian-base">
+      <params>
+        <param name="distribution">stretch</param>
+        <param name="deployment_playbook">deploy-python-matheval.yml</param>
+      </params>
+      <materials>
+        <git url="https://github.com/python-ci-cd/python-matheval.git" dest="source" materialName="python-matheval" />
+        <git url="https://github.com/python-ci-cd/deployment-utils.git" dest="deployment-utils" materialName="deployment-utils" />
+      </materials>
+    </pipeline>
+  </pipelines>
+  <templates>
+    <pipeline name="debian-base">
+      <stage name="build" cleanWorkingDir="true">
+        <jobs>
+          <job name="build-deb" timeout="5">
+            <tasks>
+              <exec command="../deployment-utils/debian-autobuild" workingdir="source" />
+            </tasks>
+            <resources>
+              <resource>debian-stretch</resource>
+              <resource>build</resource>
+            </resources>
+            <artifacts>
+              <artifact type="build" src="version" />
+              <artifact type="build" src="*.deb" dest="debian-packages/" />
+            </artifacts>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="upload-testing">
+        <jobs>
+          <job name="upload-testing">
+            <tasks>
+              <fetchartifact artifactOrigin="gocd" srcdir="debian-packages" pipeline="" stage="build" job="build-deb">
+                <runif status="passed" />
+              </fetchartifact>
+              <exec command="/bin/bash">
+                <arg>-c</arg>
+                <arg>deployment-utils/add-package testing #{distribution} *.deb</arg>
+              </exec>
+            </tasks>
+            <resources>
+              <resource>aptly</resource>
+            </resources>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="deploy-testing">
+        <jobs>
+          <job name="deploy-testing">
+            <tasks>
+              <fetchartifact artifactOrigin="gocd" srcfile="version" pipeline="" stage="build" job="build-deb" />
+              <exec command="/bin/bash" workingdir="deployment-utils/ansible/">
+                <arg>-c</arg>
+                <arg>ansible-playbook --inventory-file=testing --extra-vars="package_version=$(&lt; ../../version)" #{deployment_playbook}</arg>
+              </exec>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="upload-production">
+        <approval type="manual" />
+        <jobs>
+          <job name="upload-production">
+            <tasks>
+              <fetchartifact artifactOrigin="gocd" srcdir="debian-packages" pipeline="" stage="build" job="build-deb">
+                <runif status="passed" />
+              </fetchartifact>
+              <exec command="/bin/bash">
+                <arg>-c</arg>
+                <arg>deployment-utils/add-package production #{distribution} *.deb</arg>
+              </exec>
+            </tasks>
+            <resources>
+              <resource>aptly</resource>
+            </resources>
+          </job>
+        </jobs>
+      </stage>
+      <stage name="deploy-production">
+        <jobs>
+          <job name="deploy-production">
+            <tasks>
+              <fetchartifact artifactOrigin="gocd" srcfile="version" pipeline="" stage="build" job="build-deb" />
+              <exec command="/bin/bash" workingdir="deployment-utils/ansible/">
+                <arg>-c</arg>
+                <arg>ansible-playbook --inventory-file=production --extra-vars="package_version=$(&lt; ../../version)" #{deployment_playbook}</arg>
+              </exec>
+            </tasks>
+          </job>
+        </jobs>
+      </stage>
+    </pipeline>
+  </templates>

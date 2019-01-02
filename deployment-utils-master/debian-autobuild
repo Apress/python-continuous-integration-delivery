@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+version=$(git describe --long |sed 's/-g[A-Fa-f0-9]*$//')
+version="$version.${GO_PIPELINE_COUNTER:-0}.${GO_STAGE_COUNTER:-0}"
+
+echo $version
+echo $version > ../version
+
+export DEBFULLNAME='Go Debian Build Agent'
+export DEBEMAIL='go-noreply@example.com'
+debchange --newversion=$version  --force-distribution -b  \
+    --distribution="${DISTRIBUTION:-jessie}" 'New Version'
+dpkg-buildpackage -b -us -uc
+

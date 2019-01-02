@@ -1,0 +1,8 @@
+    <agent hostname="lara" ipaddress="192.168.2.43"
+        uuid="19e70088-927f-49cc-980f-2b1002048e09">
+      <resources>
+        <resource>debian-stretch</resource>
+        <resource>build</resource>
+        <resource>aptly</resource>
+      </resources>
+    </agent>

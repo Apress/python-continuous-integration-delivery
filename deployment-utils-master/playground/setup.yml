@@ -1,0 +1,151 @@
+---
+ - hosts: go-agent
+   vars:
+     go_server: 172.28.128.1
+   tasks:
+   - group: name=go system=yes
+   - name: Make sure the go user has an SSH key
+     user: >
+        name=go system=yes group=go generate_ssh_key=yes
+        home=/var/go
+   - name: Fetch the ssh public key, so we can distribute it.
+     fetch:
+        src: /var/go/.ssh/id_rsa.pub
+        dest: go-rsa.pub
+        fail_on_missing: yes
+        flat: yes
+   - apt: >
+        package=apt-transport-https state=present
+        update_cache=yes
+   - apt_key:
+        url: https://download.gocd.org/GOCD-GPG-KEY.asc
+        state: present
+        validate_certs: no
+   - apt_repository:
+        repo: 'deb https://download.gocd.org /'
+        state: present
+   - apt: package={{item}} state=present force=yes
+     with_items:
+      - openjdk-8-jre-headless
+      - go-agent
+      - git
+
+   - file:
+       path: /var/lib/go-agent/config
+       state: directory
+       owner: go
+       group: go
+   - copy:
+       src: files/guid.txt
+       dest: /var/lib/go-agent/config/guid.txt
+       owner: go
+       group: go
+   - name: Go agent configuration for versions 16.8 and above
+     lineinfile:
+        dest: /etc/default/go-agent
+        regexp: ^GO_SERVER_URL=
+        line: GO_SERVER_URL=https://{{ go_server }}:8154/go
+   - service: name=go-agent enabled=yes state=started
+
+ - hosts: aptly
+   tasks:
+     - apt: package={{item}} state=present
+       with_items:
+        - ansible
+        - aptly
+        - build-essential
+        - curl
+        - devscripts
+        - dh-systemd
+        - dh-virtualenv
+        - gnupg2
+        - libjson-perl
+        - python-setuptools
+        - lighttpd
+        - rng-tools
+     - copy:
+        src: files/key-control-file-gpg2
+        dest: /var/go/key-control-file
+     - command: killall rngd
+       ignore_errors: yes
+       changed_when: False
+     - command: rngd -r /dev/urandom
+       changed_when: False
+     - command: gpg --gen-key --batch /var/go/key-control-file
+       args:
+         creates: /var/go/.gnupg/pubring.gpg
+       become_user: go
+       become: true
+       changed_when: False
+     - shell: gpg --export --armor > /var/go/pubring.asc
+       args:
+         creates: /var/go/pubring.asc
+       become_user: go
+       become: true
+     - fetch:
+         src: /var/go/pubring.asc
+         dest: deb-key.asc
+         fail_on_missing: yes
+         flat: yes
+     - name: Bootstrap aptly repos on the `target` machines
+       copy:
+        src: ../add-package
+        dest: /usr/local/bin/add-package
+        mode: 0755
+     - name: Download an example package to fill the repo with
+       get_url:
+        url: https://perlgeek.de/static/dummy.deb
+        dest: /tmp/dummy.deb
+     - command: >
+            /usr/local/bin/add-package {{item}}
+            stretch /tmp/dummy.deb
+       with_items:
+         - testing
+         - production
+       become_user: go
+       become: true
+     - user: name=www-data groups=go
+
+     - name: Configure lighttpd to serve the aptly directories
+       copy:
+            src: files/lighttpd.conf
+            dest: /etc/lighttpd/conf-enabled/30-aptly.conf
+     - service: name=lighttpd state=restarted enabled=yes
+
+ - hosts: target
+   tasks:
+     - authorized_key:
+        user: root
+        key: "{{ lookup('file', 'go-rsa.pub') }}"
+     - apt_key:
+            data: "{{ lookup('file', 'deb-key.asc') }}"
+            state: present
+
+ - hosts: production
+   tasks:
+     - apt_repository:
+         repo: >
+            deb http://172.28.128.5/debian/production/stretch
+            stretch main
+         state: present
+
+ - hosts: testing
+   tasks:
+     - apt_repository:
+         repo:
+            deb http://172.28.128.5/debian/testing/stretch
+            stretch main
+         state: present
+
+ - hosts: go-agent
+   tasks:
+     - name: 'Checking SSH connectivity to {{item}}'
+       become: True
+       become_user: go
+       command: >
+          ssh -o StrictHostkeyChecking=No
+          root@"{{ hostvars[item]['ansible_ssh_host'] }}" true
+       changed_when: false
+       with_items:
+            - testing.local
+            - production.local

@@ -1,0 +1,6 @@
+---
+- hosts: web
+  serial: 1
+  max_fail_percentage: 1
+  tasks:
+    - apt: update_cache=yes package=package-info={{package_version}} state=present force=yes

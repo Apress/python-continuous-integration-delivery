@@ -1,0 +1,2 @@
+#!/bin/bash
+curl  --silent -H "Accept: application/json" --data '["+", 37, 5]' -XPOST  http://$1:8800/ | grep ^42$

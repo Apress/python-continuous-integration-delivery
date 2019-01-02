@@ -1,0 +1,11 @@
+Source: python-matheval
+Section: main
+Priority: optional
+Maintainer: Moritz Lenz <moritz.lenz@gmail.com>
+Build-Depends: debhelper (>=9), dh-virtualenv, dh-systemd, python-setuptools
+Standards-Version: 3.9.6
+
+Package: python-matheval
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3 (>= 3.4)
+Description: A web service that evaluates trees of mathematical expressions.
